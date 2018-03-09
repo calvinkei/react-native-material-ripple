@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import React, { PureComponent } from 'react';
-import { View, Animated, Easing, TouchableWithoutFeedback } from 'react-native';
+import { View, Animated, Easing, TouchableWithoutFeedback, TouchableNativeFeedback, Platform } from 'react-native';
 import { styles, radius } from './styles.js';
 
 export default class Ripple extends PureComponent {
@@ -16,8 +16,6 @@ export default class Ripple extends PureComponent {
     rippleSequential: false,
     rippleFades: true,
     disabled: false,
-
-    onRippleAnimation: (animation, callback) => animation.start(callback),
   };
 
   static propTypes = {
@@ -33,8 +31,6 @@ export default class Ripple extends PureComponent {
     rippleSequential: PropTypes.bool,
     rippleFades: PropTypes.bool,
     disabled: PropTypes.bool,
-
-    onRippleAnimation: PropTypes.func,
   };
 
   constructor(props) {
@@ -45,8 +41,6 @@ export default class Ripple extends PureComponent {
     this.onPressIn = this.onPressIn.bind(this);
     this.onPressOut = this.onPressOut.bind(this);
     this.onLongPress = this.onLongPress.bind(this);
-    this.onAnimationEnd = this.onAnimationEnd.bind(this);
-
     this.renderRipple = this.renderRipple.bind(this);
 
     this.unique = 0;
@@ -82,6 +76,11 @@ export default class Ripple extends PureComponent {
     let { ripples } = this.state;
     let { onPress, rippleSequential } = this.props;
 
+    if (Platform.OS === 'android') {
+      onPress(event);
+      return;
+    }
+
     if (!rippleSequential || !ripples.length) {
       if ('function' === typeof onPress) {
         requestAnimationFrame(() => onPress(event));
@@ -93,6 +92,11 @@ export default class Ripple extends PureComponent {
 
   onLongPress(event) {
     let { onLongPress } = this.props;
+
+    if (Platform.OS === 'android') {
+      onLongPress(event);
+      return;
+    }
 
     if ('function' === typeof onLongPress) {
       requestAnimationFrame(() => onLongPress(event));
@@ -117,20 +121,9 @@ export default class Ripple extends PureComponent {
     }
   }
 
-  onAnimationEnd() {
-    if (this.mounted) {
-      this.setState(({ ripples }) => ({ ripples: ripples.slice(1) }));
-    }
-  }
-
   startRipple(event) {
+    let { rippleDuration, rippleCentered, rippleSize } = this.props;
     let { width, height } = this.state;
-    let {
-      rippleDuration,
-      rippleCentered,
-      rippleSize,
-      onRippleAnimation,
-    } = this.props;
 
     let w2 = 0.5 * width;
     let h2 = 0.5 * height;
@@ -154,15 +147,18 @@ export default class Ripple extends PureComponent {
       R,
     };
 
-    let animation = Animated
+    Animated
       .timing(ripple.progress, {
         toValue: 1,
         easing: Easing.out(Easing.ease),
         duration: rippleDuration,
         useNativeDriver: true,
+      })
+      .start(() => {
+        if (this.mounted) {
+          this.setState(({ ripples }) => ({ ripples: ripples.slice(1) }));
+        }
       });
-
-    onRippleAnimation(animation, this.onAnimationEnd);
 
     this.setState(({ ripples }) => ({ ripples: ripples.concat(ripple) }));
   }
@@ -237,7 +233,7 @@ export default class Ripple extends PureComponent {
       borderRadius: rippleContainerBorderRadius,
     };
 
-    return (
+    return Platform.OS === 'ios' ? (
       <TouchableWithoutFeedback {...touchableProps}>
         <Animated.View {...props} pointerEvents='box-only'>
           {children}
@@ -246,6 +242,12 @@ export default class Ripple extends PureComponent {
           </View>
         </Animated.View>
       </TouchableWithoutFeedback>
+    ) : (
+      <TouchableNativeFeedback {...touchableProps}>
+        <View {...props}>
+          {children}
+        </View>
+      </TouchableNativeFeedback>
     );
   }
 }
